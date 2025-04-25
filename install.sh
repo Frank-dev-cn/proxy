@@ -128,7 +128,7 @@ Description=Cloudflare Tunnel
 After=network.target
 
 [Service]
-ExecStart=/usr/local/bin/cloudflared tunnel run --config /etc/cloudflared/config.yml
+ExecStart=/usr/local/bin/cloudflared --config /etc/cloudflared/config.yml tunnel run
 Restart=always
 RestartSec=5
 User=root
