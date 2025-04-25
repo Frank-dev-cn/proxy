@@ -1,11 +1,23 @@
 #!/bin/bash
 set -e
 
-# 版本定义
-SING_BOX_VERSION="1.8.5"
-ARCH=$(uname -m)
+# === 基础配置 ===
+DOMAIN="socks.frankwong.dpdns.org"
+TUNNEL_NAME="socks-tunnel"
+CONFIG_DIR="/etc/cloudflared"
+TUNNEL_DIR="${CONFIG_DIR}/tunnels"
 
-# 检查架构
+echo "📦 安装依赖..."
+apt update -y
+apt install -y curl wget unzip qrencode
+
+echo "📥 安装 cloudflared..."
+wget -O /usr/local/bin/cloudflared https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
+chmod +x /usr/local/bin/cloudflared
+
+echo "📥 安装 sing-box..."
+ARCH=$(uname -m)
+SING_BOX_VERSION="1.8.5"
 case "$ARCH" in
   x86_64) PLATFORM="linux-amd64" ;;
   aarch64) PLATFORM="linux-arm64" ;;
@@ -13,114 +25,109 @@ case "$ARCH" in
   *) echo "❌ 不支持的架构: $ARCH"; exit 1 ;;
 esac
 
-# 自动安装依赖
-for cmd in curl wget qrencode; do
-    if ! command -v $cmd >/dev/null 2>&1; then
-        echo "🔧 缺少 $cmd，正在安装..."
-        apt install -y $cmd
-    fi
-done
-
-# 停止已有服务
-echo "🛑 检查并停止旧服务..."
-systemctl stop sb 2>/dev/null || true
-systemctl stop cloudflared 2>/dev/null || true
-
-# 安装 sing-box
-echo "📥 下载并安装 sing-box..."
 curl -LO "https://github.com/SagerNet/sing-box/releases/download/v${SING_BOX_VERSION}/sing-box-${SING_BOX_VERSION}-${PLATFORM}.tar.gz"
 tar -zxf sing-box-${SING_BOX_VERSION}-${PLATFORM}.tar.gz
 cp sing-box-${SING_BOX_VERSION}-${PLATFORM}/sing-box /usr/bin/sb
 chmod +x /usr/bin/sb
 
-# 配置 sing-box
+# ========== Cloudflare 登录授权 ==========
+echo "🌐 请在弹出的浏览器中登录 Cloudflare 账户以授权此主机..."
+cloudflared tunnel login
+
+# ========== 创建 Tunnel ==========
+echo "🚧 正在创建 Tunnel: $TUNNEL_NAME ..."
+cloudflared tunnel create "$TUNNEL_NAME"
+
+# ========== 配置 sing-box ==========
 mkdir -p /etc/sb
 cat <<EOF > /etc/sb/config.json
 {
-  "log": { "level": "info", "timestamp": true },
+  "log": {
+    "level": "info",
+    "timestamp": true
+  },
   "dns": {
     "servers": [
-      { "tag": "dns-google", "address": "8.8.8.8" },
-      { "tag": "dns-cloudflare", "address": "1.1.1.1" }
+      { "address": "8.8.8.8" },
+      { "address": "1.1.1.1" }
     ]
   },
   "inbounds": [
-    { "type": "socks", "listen": "0.0.0.0", "listen_port": 1080, "sniff": true }
+    {
+      "type": "socks",
+      "listen": "127.0.0.1",
+      "listen_port": 1080,
+      "sniff": true
+    }
   ],
   "outbounds": [
-    { "type": "direct", "tag": "direct" }
+    {
+      "type": "direct"
+    }
   ]
 }
 EOF
 
-# 配置 sb systemd 服务
+# ========== 写入 cloudflared 配置 ==========
+TUNNEL_ID=$(cloudflared tunnel list | grep "$TUNNEL_NAME" | awk '{print $1}')
+
+mkdir -p "$CONFIG_DIR"
+cat <<EOF > $CONFIG_DIR/config.yml
+tunnel: $TUNNEL_ID
+credentials-file: $TUNNEL_DIR/${TUNNEL_ID}.json
+
+ingress:
+  - hostname: $DOMAIN
+    service: socks5://localhost:1080
+  - service: http_status:404
+EOF
+
+# ========== 配置 systemd 服务 ==========
+echo "🛠️ 写入 systemd 服务..."
+
 cat <<EOF > /etc/systemd/system/sb.service
 [Unit]
-Description=sing-box service
+Description=sing-box proxy
 After=network.target
+
 [Service]
 ExecStart=/usr/bin/sb run -c /etc/sb/config.json
 Restart=on-failure
 User=root
 LimitNOFILE=65535
+
 [Install]
 WantedBy=multi-user.target
 EOF
 
-# 启动 sing-box
-systemctl daemon-reload
-systemctl enable sb
-systemctl restart sb
-
-# 安装 cloudflared
-echo "📥 安装 cloudflared..."
-wget -O /usr/local/bin/cloudflared https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
-chmod +x /usr/local/bin/cloudflared
-
-# cloudflared 自动守护脚本
-cat <<EOF > /usr/local/bin/cloudflared-run.sh
-#!/bin/bash
-mkdir -p /var/log
-while true; do
-    cloudflared tunnel --url socks5://localhost:1080 2>&1 | tee /var/log/cloudflared.log
-    echo "Cloudflared 隧道断了，10秒后重连..."
-    sleep 10
-done
-EOF
-chmod +x /usr/local/bin/cloudflared-run.sh
-
-# cloudflared systemd 服务
 cat <<EOF > /etc/systemd/system/cloudflared.service
 [Unit]
-Description=cloudflared tunnel
+Description=Cloudflare Tunnel
 After=network.target
+
 [Service]
-ExecStart=/usr/local/bin/cloudflared-run.sh
+ExecStart=/usr/local/bin/cloudflared tunnel run --config $CONFIG_DIR/config.yml
 Restart=always
 RestartSec=5
 User=root
+
 [Install]
 WantedBy=multi-user.target
 EOF
 
-# 启动 cloudflared
+echo "🔄 启动服务..."
 systemctl daemon-reload
+systemctl enable sb
 systemctl enable cloudflared
+systemctl restart sb
 systemctl restart cloudflared
 
-# 等待建立隧道
-sleep 10
+sleep 5
 
-# 获取隧道地址
-TUNNEL_URL=$(cat /var/log/cloudflared.log | grep -m1 -o 'https://[^ ]*')
+# ========== 输出 Socks5 地址和二维码 ==========
+echo "✅ 安装完成，公网 Socks5 地址如下："
+echo "🌍 socks5h://$DOMAIN:443"
 
-# 输出结果
-if [[ -z "$TUNNEL_URL" ]]; then
-  echo "❗ 没找到隧道地址，cloudflared 可能还没连接成功，请手动检查 /var/log/cloudflared.log"
-else
-  echo "🌍 你的公网访问地址是：$TUNNEL_URL"
-  echo "📱 正在生成 Socks5 代理二维码..."
-  PROXY_URL="${TUNNEL_URL#https://}:443"
-  qrencode -t ANSIUTF8 "socks5h://$PROXY_URL"
-  echo "✅ 安装完成，手机扫码或手动配置 Socks5 地址：$PROXY_URL"
-fi
+echo "📱 正在生成二维码（终端扫码）..."
+qrencode -t ANSIUTF8 "socks5h://$DOMAIN:443"
+
