@@ -11,7 +11,7 @@ echo "📦 安装依赖..."
 apt update -y
 apt install -y curl wget unzip qrencode
 
-# ========== 自动停止已有服务 ==========
+# ========== 自动停止已有服务 ========== 
 echo "🛑 检查 sb 服务状态..."
 if systemctl list-units --full --all | grep -Fq 'sb.service'; then
     echo "🛑 sb.service 正在运行，正在停止..."
@@ -24,12 +24,12 @@ if systemctl list-units --full --all | grep -Fq 'cloudflared.service'; then
     systemctl stop cloudflared || true
 fi
 
-# ========== 安装 cloudflared ==========
+# ========== 安装 cloudflared ========== 
 echo "📥 安装 cloudflared..."
 wget -O /usr/local/bin/cloudflared https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
 chmod +x /usr/local/bin/cloudflared
 
-# ========== 安装 sing-box ==========
+# ========== 安装 sing-box ========== 
 echo "📥 安装 sing-box..."
 ARCH=$(uname -m)
 SING_BOX_VERSION="1.8.5"
@@ -45,15 +45,22 @@ tar -zxf sing-box-${SING_BOX_VERSION}-${PLATFORM}.tar.gz
 cp sing-box-${SING_BOX_VERSION}-${PLATFORM}/sing-box /usr/bin/sb
 chmod +x /usr/bin/sb
 
-# ========== Cloudflare 登录授权 ==========
+# ========== Cloudflare 登录授权 ========== 
 echo "🌐 请在弹出的浏览器中登录 Cloudflare 账户以授权此主机..."
 cloudflared tunnel login
 
-# ========== 创建 Tunnel ==========
+# ========== 检查并删除已存在的 Tunnel ========== 
+echo "🚧 检查 Tunnel 是否已存在..."
+if cloudflared tunnel list | grep -Fq "$TUNNEL_NAME"; then
+    echo "⚠️ Tunnel '$TUNNEL_NAME' 已存在，正在删除..."
+    cloudflared tunnel delete "$TUNNEL_NAME"
+fi
+
+# ========== 创建 Tunnel ========== 
 echo "🚧 正在创建 Tunnel: $TUNNEL_NAME ..."
 cloudflared tunnel create "$TUNNEL_NAME"
 
-# ========== 配置 sing-box ==========
+# ========== 配置 sing-box ========== 
 mkdir -p /etc/sb
 cat <<EOF > /etc/sb/config.json
 {
@@ -83,7 +90,7 @@ cat <<EOF > /etc/sb/config.json
 }
 EOF
 
-# ========== 写 cloudflared 配置 ==========
+# ========== 写 cloudflared 配置 ========== 
 TUNNEL_ID=$(cloudflared tunnel list | grep "$TUNNEL_NAME" | awk '{print $1}')
 
 mkdir -p "$CONFIG_DIR"
@@ -97,7 +104,7 @@ ingress:
   - service: http_status:404
 EOF
 
-# ========== 配置 systemd 服务 ==========
+# ========== 配置 systemd 服务 ========== 
 echo "🛠️ 写入 systemd 服务..."
 
 cat <<EOF > /etc/systemd/system/sb.service
@@ -130,7 +137,7 @@ User=root
 WantedBy=multi-user.target
 EOF
 
-# ========== 启动服务 ==========
+# ========== 启动服务 ========== 
 echo "🔄 启动 sb 和 cloudflared..."
 systemctl daemon-reload
 systemctl enable sb
@@ -140,7 +147,7 @@ systemctl restart cloudflared
 
 sleep 5
 
-# ========== 输出 Socks5 地址和二维码 ==========
+# ========== 输出 Socks5 地址和二维码 ========== 
 echo "✅ 安装完成，公网 Socks5 地址如下："
 echo "🌍 socks5h://$DOMAIN:443"
 
