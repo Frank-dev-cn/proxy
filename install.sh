@@ -15,6 +15,13 @@ echo "📥 安装 cloudflared..."
 wget -O /usr/local/bin/cloudflared https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
 chmod +x /usr/local/bin/cloudflared
 
+# 停止已存在的 sb 服务，防止 "Text file busy"
+echo "🛑 检查 sb 服务状态..."
+if systemctl list-units --full --all | grep -Fq 'sb.service'; then
+    echo "🛑 sb.service 正在运行，正在停止..."
+    systemctl stop sb || true
+fi
+
 echo "📥 安装 sing-box..."
 ARCH=$(uname -m)
 SING_BOX_VERSION="1.8.5"
@@ -68,7 +75,7 @@ cat <<EOF > /etc/sb/config.json
 }
 EOF
 
-# ========== 写入 cloudflared 配置 ==========
+# ========== 写 cloudflared 配置 ==========
 TUNNEL_ID=$(cloudflared tunnel list | grep "$TUNNEL_NAME" | awk '{print $1}')
 
 mkdir -p "$CONFIG_DIR"
@@ -115,7 +122,8 @@ User=root
 WantedBy=multi-user.target
 EOF
 
-echo "🔄 启动服务..."
+# ========== 启动服务 ==========
+echo "🔄 启动 sb 和 cloudflared..."
 systemctl daemon-reload
 systemctl enable sb
 systemctl enable cloudflared
@@ -128,6 +136,5 @@ sleep 5
 echo "✅ 安装完成，公网 Socks5 地址如下："
 echo "🌍 socks5h://$DOMAIN:443"
 
-echo "📱 正在生成二维码（终端扫码）..."
+echo "📱 正在生成 Socks5 代理二维码..."
 qrencode -t ANSIUTF8 "socks5h://$DOMAIN:443"
-
