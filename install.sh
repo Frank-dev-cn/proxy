@@ -11,17 +11,25 @@ echo "📦 安装依赖..."
 apt update -y
 apt install -y curl wget unzip qrencode
 
-echo "📥 安装 cloudflared..."
-wget -O /usr/local/bin/cloudflared https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
-chmod +x /usr/local/bin/cloudflared
-
-# 停止已存在的 sb 服务，防止 "Text file busy"
+# ========== 自动停止已有服务 ==========
 echo "🛑 检查 sb 服务状态..."
 if systemctl list-units --full --all | grep -Fq 'sb.service'; then
     echo "🛑 sb.service 正在运行，正在停止..."
     systemctl stop sb || true
 fi
 
+echo "🛑 检查 cloudflared 服务状态..."
+if systemctl list-units --full --all | grep -Fq 'cloudflared.service'; then
+    echo "🛑 cloudflared.service 正在运行，正在停止..."
+    systemctl stop cloudflared || true
+fi
+
+# ========== 安装 cloudflared ==========
+echo "📥 安装 cloudflared..."
+wget -O /usr/local/bin/cloudflared https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
+chmod +x /usr/local/bin/cloudflared
+
+# ========== 安装 sing-box ==========
 echo "📥 安装 sing-box..."
 ARCH=$(uname -m)
 SING_BOX_VERSION="1.8.5"
