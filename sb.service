@@ -1,0 +1,12 @@
+[Unit]
+Description=sing-box service
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/sb run -c /etc/sb/config.json
+Restart=on-failure
+User=root
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target
