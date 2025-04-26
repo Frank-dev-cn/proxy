@@ -84,7 +84,7 @@ cat <<EOF > /etc/sb/config.json
   ],
   "outbounds": [
     {
-      "type": "direct"
+      "type": "direct",
       "domain_strategy": "prefer_ipv4"
     }
   ]
