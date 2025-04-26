@@ -93,7 +93,18 @@ EOF
 # ========== 写 cloudflared 配置 ========== 
 TUNNEL_ID=$(cloudflared tunnel list | grep "$TUNNEL_NAME" | awk '{print $1}')
 
-mkdir -p "$CONFIG_DIR"
+# 检查并创建必要的目录,并拷贝json文件到指定位置
+if [ ! -d "$CONFIG_DIR" ]; then
+    mkdir -p "$CONFIG_DIR"
+    echo "Created config directory: $CONFIG_DIR"
+fi
+if [ ! -d "$TUNNEL_DIR" ]; then
+    mkdir -p "$TUNNEL_DIR"
+    echo "Created tunnel directory: $TUNNEL_DIR"
+fi
+cp /root/.cloudflared/${TUNNEL_ID}.json $TUNNEL_DIR
+
+
 cat <<EOF > $CONFIG_DIR/config.yml
 tunnel: $TUNNEL_ID
 credentials-file: $TUNNEL_DIR/${TUNNEL_ID}.json
