@@ -1,4 +1,4 @@
-# 检测 socks.frankwong.dpdns.org 配置
+# windows下，powershell 检测 socks.frankwong.dpdns.org 配置
 
 $domain = "socks.frankwong.dpdns.org"
 
