@@ -76,16 +76,24 @@ cat <<EOF > /etc/sb/config.json
   },
   "inbounds": [
     {
-      "type": "socks",
+      "type": "vless",
       "listen": "127.0.0.1",
-      "listen_port": 1080,
-      "sniff": true
+      "listen_port": 2080,
+      "users": [
+        {
+          "uuid": "123e4567-e89b-12d3-a456-426614174000",
+          "flow": ""
+        }
+      ],
+      "transport": {
+        "type": "ws",
+        "path": "/"
+      }
     }
   ],
   "outbounds": [
     {
-      "type": "direct",
-      "domain_strategy": "prefer_ipv4"
+      "type": "direct"
     }
   ]
 }
@@ -111,8 +119,10 @@ tunnel: $TUNNEL_ID
 credentials-file: $TUNNEL_DIR/${TUNNEL_ID}.json
 
 ingress:
-  - hostname: $DOMAIN
-    service: socks5://localhost:1080
+  - hostname: socks.frankwong.dpdns.org
+    service: http://127.0.0.1:2080
+    originRequest:
+      noTLSVerify: true
   - service: http_status:404
 EOF
 
