@@ -169,6 +169,59 @@ systemctl restart cloudflared
 
 sleep 5
 
+# ========== 更新CNAME记录 ========== 
+API_TOKEN="dEofg5bZr6fc_FXFzxJBIQ_PKUPc5cTPqnhIfV1U"
+DOMAIN="frankwong.dpdns.org"      # 根域名
+SUBDOMAIN="socks.frankwong.dpdns.org" # 要更新的子域名
+TUNNEL_ID=$(jq -r '.TunnelID' "$(ls /root/.cloudflared/*.json | head -n 1)")
+
+# ==== 开始执行 ====
+echo "===== 开始更新 CNAME 记录 ====="
+
+# 1. 获取 Zone ID
+ZONE_ID=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones?name=$DOMAIN" \
+  -H "Authorization: Bearer $API_TOKEN" \
+  -H "Content-Type: application/json" | jq -r '.result[0].id')
+
+if [ -z "$ZONE_ID" ] || [ "$ZONE_ID" == "null" ]; then
+  echo "❌ 获取 Zone ID 失败，请检查 DOMAIN 是否正确。"
+  exit 1
+fi
+
+echo "✅ Zone ID: $ZONE_ID"
+
+# 2. 获取 DNS Record ID
+DNS_RECORD_ID=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records?type=CNAME&name=$SUBDOMAIN" \
+  -H "Authorization: Bearer $API_TOKEN" \
+  -H "Content-Type: application/json" | jq -r '.result[0].id')
+
+if [ -z "$DNS_RECORD_ID" ] || [ "$DNS_RECORD_ID" == "null" ]; then
+  echo "❌ 获取 DNS Record ID 失败，请检查 SUBDOMAIN 是否正确，且 CNAME 记录是否已存在。"
+  exit 1
+fi
+
+echo "✅ DNS Record ID: $DNS_RECORD_ID"
+
+# 3. 更新 DNS Record
+RESPONSE=$(curl -s -X PUT "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records/$DNS_RECORD_ID" \
+  -H "Authorization: Bearer $API_TOKEN" \
+  -H "Content-Type: application/json" \
+  --data '{
+    "type": "CNAME",
+    "name": "'"$SUBDOMAIN"'",
+    "content": "'"$TUNNEL_ID"'.cfargotunnel.com",
+    "ttl": 120,
+    "proxied": true
+}')
+
+SUCCESS=$(echo "$RESPONSE" | jq -r '.success')
+
+if [ "$SUCCESS" == "true" ]; then
+  echo "🎉 成功更新 CNAME！"
+else
+  echo "❌ 更新失败，返回信息: $RESPONSE"
+fi
+
 # ========== 输出 Socks5 地址和二维码 ========== 
 echo "✅ 安装完成，公网 Socks5 地址如下："
 echo "🌍 socks5h://$DOMAIN:443"
