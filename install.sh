@@ -77,7 +77,7 @@ cat <<EOF > /etc/sb/config.json
   "inbounds": [
     {
       "type": "vless",
-      "listen": "127.0.0.1",
+      "listen": "0.0.0.0",
       "listen_port": 2080,
       "users": [
         {
