@@ -119,7 +119,7 @@ tunnel: $TUNNEL_ID
 credentials-file: $TUNNEL_DIR/${TUNNEL_ID}.json
 
 ingress:
-  - hostname: socks.frankwong.dpdns.org
+  - hostname: socks.frankdevcn.dpdns.org
     service: http://127.0.0.1:2080
     originRequest:
       noTLSVerify: true
@@ -172,7 +172,7 @@ sleep 5
 # ========== 更新CNAME记录 ========== 
 API_TOKEN="dEofg5bZr6fc_FXFzxJBIQ_PKUPc5cTPqnhIfV1U"
 DOMAIN="frankdevcn.dpdns.org"      # 根域名
-SUBDOMAIN="socks.frankwong.dpdns.org" # 要更新的子域名
+SUBDOMAIN="socks.frankdevcn.dpdns.org" # 要更新的子域名
 TUNNEL_ID=$(jq -r '.TunnelID' "$(ls /root/.cloudflared/*.json | head -n 1)")
 
 # ==== 开始执行 ====
