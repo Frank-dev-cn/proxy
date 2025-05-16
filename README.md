@@ -21,5 +21,8 @@ nix=y uuid=d15974a0-3e66-4d08-b2c5-aefcaae3b717 vmpt=32156 agn=idx.frankdevcn.dp
 
 ## xray
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/Frank-dev-cn/proxy/main/install_xray.sh)
+bash <(curl -Ls https://raw.githubusercontent.com/Frank-dev-cn/proxy/main/xray_install.sh)
+```
+```bash
+bash <(curl -Ls https://raw.githubusercontent.com/Frank-dev-cn/proxy/main/xray_uninstall.sh)
 ```
