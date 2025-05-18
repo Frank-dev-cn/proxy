@@ -22,9 +22,11 @@ FLOW_CONTROL="xtls-rprx-vision"
 
 # --- Xray 版本控制 ---
 # 为了稳定性，我们固定一个已知的Xray版本。
-# 您可以访问 https://github.com/XTLS/Xray-core/releases 查看最新的稳定版本号并在此处更新。
-# 这是一个假设的、在2025年5月可能存在的近期稳定版本示例。
-FIXED_XRAY_VERSION="v1.9.2" # <--- 请根据实际情况检查并更新此版本号！
+# !!! 重要 !!!
+# 您提供的截图显示 v25.5.16 是您环境中的 "Latest"。脚本将使用您在此处设置的版本。
+# 如果 v25.5.16 版本作为服务持续失败，请考虑访问 https://github.com/XTLS/Xray-core/releases
+# 查找一个官方的、历史悠久的稳定版本号 (例如 v1.8.x 系列的某个版本) 并在此处更新。
+FIXED_XRAY_VERSION="v25.5.16" # <--- 根据您的截图，这是 "Latest"。如果问题持续，请尝试官方历史稳定版。
 
 # --- 辅助函数 ---
 
@@ -114,12 +116,23 @@ mkdir -p "$HOME/.config/systemd/user/" # systemd 用户服务目录
 echo "📥 2. 下载并安装 Xray-core..."
 LATEST_TAG="$FIXED_XRAY_VERSION" # 使用固定的版本号
 echo "    将使用固定版本: ${LATEST_TAG}"
+# 确保版本号前有 "v"
+if [[ ! "$LATEST_TAG" == v* ]] && [[ ! "$LATEST_TAG" == "latest" ]]; then # "latest" 本身不需要加 "v"
+    LATEST_TAG="v${LATEST_TAG}"
+fi
 XRAY_ZIP_URL="https://github.com/XTLS/Xray-core/releases/download/${LATEST_TAG}/Xray-linux-64.zip"
 
 echo "    正在从 ${XRAY_ZIP_URL} 下载..."
-curl -L -o "${PROXY_DIR}/xray.zip" "${XRAY_ZIP_URL}" || { echo "❌ 下载 Xray ${LATEST_TAG} 失败。请检查版本号是否正确或网络。"; exit 1; }
+curl -L -f -o "${PROXY_DIR}/xray.zip" "${XRAY_ZIP_URL}" || {
+    echo "❌ 下载 Xray ${LATEST_TAG} 失败。"
+    echo "   请检查以下几点："
+    echo "   1. 版本号 '${LATEST_TAG}' 是否真实存在于 https://github.com/XTLS/Xray-core/releases"
+    echo "   2. 您的网络连接是否正常。"
+    echo "   3. 如果版本号无误，可能是 GitHub Releases 临时出现问题。"
+    exit 1;
+}
 echo "    解压 Xray..."
-unzip -o "${PROXY_DIR}/xray.zip" -d "${PROXY_DIR}/bin/" geosite.dat geoip.dat xray || { echo "❌ 解压 Xray 失败。"; exit 1; }
+unzip -o "${PROXY_DIR}/xray.zip" -d "${PROXY_DIR}/bin/" geosite.dat geoip.dat xray || { echo "❌ 解压 Xray 失败 (下载的文件可能不是有效的zip包)。"; exit 1; }
 rm "${PROXY_DIR}/xray.zip"
 chmod +x "${PROXY_DIR}/bin/xray"
 echo "    Xray-core (${LATEST_TAG}) 安装完毕。"
@@ -206,18 +219,20 @@ cat > "${PROXY_DIR}/etc/config.json" <<EOF
 EOF
 echo "    配置文件创建成功。"
 
-# 5. 创建 systemd 用户服务文件 (包含 SupplementaryGroups= 修复)
+# 5. 创建 systemd 用户服务文件 (尝试更精简的配置)
 echo "🛠️  5. 创建 systemd 用户服务文件 (~/.config/systemd/user/${SERVICE_NAME}.service)..."
 cat > "$HOME/.config/systemd/user/${SERVICE_NAME}.service" <<EOF
 [Unit]
-Description=Xray Proxy Server (User Service by script)
+Description=Xray Proxy Server (User Service by script - Minimal v2)
 After=network.target network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-User=%U
-SupplementaryGroups= # <--- 针对 216/GROUP 错误的修复
+# User=%U
+# SupplementaryGroups=
+# 上述 User 和 SupplementaryGroups 指令已在此版本中移除，以测试是否能避免环境限制。
+# 服务将默认以运行 systemd --user 实例的用户身份执行。
 ExecStart=${PROXY_DIR}/bin/xray run -config ${PROXY_DIR}/etc/config.json
 Restart=on-failure
 RestartSec=5
@@ -227,7 +242,7 @@ Environment="XRAY_LOCATION_ASSET=${PROXY_DIR}/bin"
 [Install]
 WantedBy=default.target
 EOF
-echo "    服务文件创建成功。"
+echo "    服务文件创建成功 (已使用更精简的配置)。"
 
 # 6. 启动并设置开机自启 (用户层面)
 echo "🚀 6. 启动服务并设置用户登录后自启..."
@@ -278,7 +293,8 @@ echo "  - 要使服务在您退出登录后依旧运行, 请为您的用户启�
 echo "    sudo loginctl enable-linger $(whoami) (此命令通常需要sudo权限, 但只需执行一次)"
 echo "  - 查看服务日志: journalctl --user -u ${SERVICE_NAME} -f"
 echo "  - 停止服务: systemctl --user stop ${SERVICE_NAME}"
-echo "  - 卸载服务和文件: systemctl --user disable --now ${SERVICE_NAME} && rm -rf ${PROXY_DIR} ~/.config/systemd/user/${SERVICE_NAME}.service && systemctl --user daemon-reload"
+echo "  - 卸载服务和文件 (可使用配套的卸载脚本，或手动执行):"
+echo "    systemctl --user disable --now ${SERVICE_NAME} && rm -rf ${PROXY_DIR} ~/.config/systemd/user/${SERVICE_NAME}.service && systemctl --user daemon-reload"
 echo "--------------------------------------------------------------------"
 
 exit 0
