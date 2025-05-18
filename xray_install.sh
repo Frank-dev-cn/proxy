@@ -11,7 +11,7 @@ XRAY_SERVICE_NAME="xray-user-proxy"
 # Xray 本地监听地址 (供 cloudflared 连接)
 XRAY_LISTEN_ADDRESS="127.0.0.1"
 # Xray 本地监听端口 (供 cloudflared 连接, 根据图示)
-XRAY_LISTEN_PORT=32156
+XRAY_LISTEN_PORT=8080
 
 # Cloudflare Tunnel 相关配置
 # !!! 警告：这是一个非常敏感的 Token，请勿公开分享包含真实 Token 的脚本 !!!
